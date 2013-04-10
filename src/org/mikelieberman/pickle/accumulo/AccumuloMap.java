@@ -1,7 +1,6 @@
 package org.mikelieberman.pickle.accumulo;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -11,19 +10,16 @@ import java.util.NavigableSet;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeSet;
-import java.util.UUID;
 
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.AccumuloException;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
 import org.apache.accumulo.core.client.BatchWriter;
 import org.apache.accumulo.core.client.Connector;
-import org.apache.accumulo.core.client.Instance;
 import org.apache.accumulo.core.client.MutationsRejectedException;
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.client.TableExistsException;
 import org.apache.accumulo.core.client.TableNotFoundException;
-import org.apache.accumulo.core.client.ZooKeeperInstance;
 import org.apache.accumulo.core.client.admin.TableOperations;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Mutation;
@@ -44,12 +40,9 @@ public class AccumuloMap<K, V> implements NavigableMap<K, V> {
 	private boolean autoflush;
 	private Comparator<K> comparator;
 
-	public AccumuloMap(String zookeepers, String instance, String username, String password,
-			String tablename, boolean clear, boolean autoflush, Comparator<K> comparator)
+	public AccumuloMap(Connector connector, String tablename, boolean clear, boolean autoflush, Comparator<K> comparator)
 					throws AccumuloException, AccumuloSecurityException, TableExistsException, TableNotFoundException, IOException {
-		Instance inst = new ZooKeeperInstance(instance, zookeepers);
-		connector = inst.getConnector(username, password.getBytes());
-
+		this.connector = connector;
 		this.tableName = tablename;
 		this.autoflush = autoflush;
 		this.comparator = comparator;

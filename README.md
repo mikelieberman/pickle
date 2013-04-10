@@ -1,4 +1,28 @@
-pickle
+Pickle - Persistent key/value storage in Java
 ======
 
-Pickle - Persistent data storage implementations
+In Java, data structures such as Maps and Sets are very useful, but
+when dealing with large amounts of data there are practical limits
+on memory size.  Oftentimes you want to persist this data to disk
+or database.  Key/value stores are ubiquitous and there are many
+implemtations, but I haven't found any that implement the Map/Set
+interfaces.  Pickle provides this capability with
+implementations of Map and Set, using persistent key/value stores
+as underlying engines.  Any Serializable objects can be used as
+keys and values.
+
+Current implementations:
+- JDBM (http://jdbm.sourceforge.net/)
+- Accumulo (http://accumulo.apache.org/)
+
+Planned implementations:
+- Berkeley DB (http://www.oracle.com/technetwork/products/berkeleydb/)
+- SQLite (http://www.sqlite.org/)
+- Voldemort (http://www.project-voldemort.com/)
+- MapDB (http://www.mapdb.org/)
+
+Planned features:
+- PickleMap/PickleSet interfaces (closeable)
+- Generic Pickle set leveraging Pickle map
+- PickleException
+- Using Kryo for more optimized serialization

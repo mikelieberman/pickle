@@ -16,6 +16,7 @@ Current implementations:
 - Accumulo (http://accumulo.apache.org/)
 
 Planned implementations:
+- LevelDB (http://code.google.com/p/leveldb/)
 - Berkeley DB (http://www.oracle.com/technetwork/products/berkeleydb/)
 - MapDB (http://www.mapdb.org/)
 

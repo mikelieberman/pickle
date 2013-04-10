@@ -17,12 +17,17 @@ Current implementations:
 
 Planned implementations:
 - Berkeley DB (http://www.oracle.com/technetwork/products/berkeleydb/)
+- MapDB (http://www.mapdb.org/)
+
+Other potential implementations:
 - SQLite (http://www.sqlite.org/)
 - Voldemort (http://www.project-voldemort.com/)
-- MapDB (http://www.mapdb.org/)
+- ... (other suggestions welcome)
 
 Planned features:
 - PickleMap/PickleSet interfaces (closeable)
 - Generic Pickle set leveraging Pickle map
 - PickleException
-- Using Kryo for more optimized serialization
+- Using Kryo for serialization
+- Compression
+- More of the NavigableSet features

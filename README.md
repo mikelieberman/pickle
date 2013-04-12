@@ -17,12 +17,13 @@ Current implementations:
 
 Planned implementations:
 - LevelDB (http://code.google.com/p/leveldb/)
+- Cdb (http://cr.yp.to/cdb.html)
 - Berkeley DB (http://www.oracle.com/technetwork/products/berkeleydb/)
-- MapDB (http://www.mapdb.org/)
 
 Other potential implementations:
 - SQLite (http://www.sqlite.org/)
 - Voldemort (http://www.project-voldemort.com/)
+- MapDB (http://www.mapdb.org/)
 - ... (other suggestions welcome)
 
 Planned features:

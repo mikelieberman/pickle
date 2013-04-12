@@ -7,11 +7,11 @@ import org.apache.accumulo.core.data.Mutation;
 public class FlushedBatchWriter implements BatchWriter {
 
 	private BatchWriter writer;
-	
+
 	public FlushedBatchWriter(BatchWriter writer) {
 		this.writer = writer;
 	}
-	
+
 	@Override
 	public void addMutation(Mutation m) throws MutationsRejectedException {
 		writer.addMutation(m);

@@ -1,21 +1,19 @@
 package org.mikelieberman.pickle.accumulo;
 
-import java.io.IOException;
-import java.util.Collection;
-import java.util.Comparator;
+import java.nio.ByteBuffer;
+import java.util.AbstractMap;
+import java.util.AbstractSet;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.NavigableMap;
-import java.util.NavigableSet;
 import java.util.Set;
-import java.util.SortedMap;
-import java.util.TreeSet;
 
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.AccumuloException;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
 import org.apache.accumulo.core.client.BatchWriter;
 import org.apache.accumulo.core.client.Connector;
+import org.apache.accumulo.core.client.IteratorSetting;
 import org.apache.accumulo.core.client.MutationsRejectedException;
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.client.TableExistsException;
@@ -25,403 +23,265 @@ import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.data.Value;
+import org.apache.accumulo.core.iterators.LongCombiner;
+import org.apache.accumulo.core.iterators.user.SummingCombiner;
 import org.apache.hadoop.io.Text;
+import org.mikelieberman.pickle.PickleMap;
+import org.mikelieberman.pickle.Pickler;
 
-public class AccumuloMap<K, V> implements NavigableMap<K, V> {
+public class AccumuloMap<K, V> extends AbstractMap<K, V> implements PickleMap<K, V> {
 
-	private static final Text METAROW = new Text("!METADATA");
-	private static final Text ROWCOUNTCF = new Text("rowcount");
-	private static final Text EMPTY = new Text();
+	protected static final Text EMPTY = new Text();
 
-	private Connector connector;
-	private String tableName;
-	private Scanner scanner;
-	private BatchWriter writer;
-	private boolean autoflush;
-	private Comparator<K> comparator;
+	protected static final Text METAROW = new Text("!METADATA");
+	protected static final Text COUNTCF = new Text("count");
 
-	public AccumuloMap(Connector connector, String tablename, boolean clear, boolean autoflush, Comparator<K> comparator)
-					throws AccumuloException, AccumuloSecurityException, TableExistsException, TableNotFoundException, IOException {
-		this.connector = connector;
-		this.tableName = tablename;
-		this.autoflush = autoflush;
-		this.comparator = comparator;
+	protected Connector conn;
+	protected String table;
+	protected boolean autoflush;
+	protected Scanner scanner;
+	protected BatchWriter writer;
 
-		TableOperations ops = connector.tableOperations();
+	public AccumuloMap(Connector conn, String table) throws AccumuloException {
+		this(conn, table, true);
+	}
 
-		if (clear && ops.exists(tableName)) {
-			ops.delete(tableName);
-		}
+	public AccumuloMap(Connector conn, String table, boolean autoflush) throws AccumuloException {
+		this(conn, table, autoflush, false);
+	}
 
-		boolean created = false;
+	public AccumuloMap(Connector conn, String table,
+			boolean autoflush, boolean create) throws AccumuloException {
+		try {
+			this.conn = conn;
+			this.table = table;
+			this.autoflush = autoflush;
 
-		if (!ops.exists(tableName)) {
-			ops.create(tableName);
-			created = true;
-		}
-		
-		initScannerAndWriter();
+			if (create) {
+				recreateTable();
+			}
 
-		if (created) {
-			initMetadata();
+			initScannerAndWriter();
+
+			if (create) {
+				resetCount();
+			}
+
+		} catch (AccumuloSecurityException e) {
+			throw new AccumuloException(e);
+		} catch (TableExistsException e) {
+			throw new AccumuloException(e);
+		} catch (TableNotFoundException e) {
+			throw new AccumuloException(e);
 		}
 	}
-	
-	private void initScannerAndWriter() throws TableNotFoundException {
-		scanner = connector.createScanner(tableName, Constants.NO_AUTHS);
 
-		writer = connector.createBatchWriter(tableName, 1000000L, 300000, 2);
+	protected void recreateTable() throws AccumuloException,
+	AccumuloSecurityException, TableNotFoundException, TableExistsException {
+		TableOperations ops = conn.tableOperations();
+
+		if (ops.exists(table)) {
+			ops.delete(table);
+		}
+
+		ops.create(table);
+
+		// Attach the counting iterator to keep a row count.
+		IteratorSetting settings = new IteratorSetting(10, SummingCombiner.class);
+
+		IteratorSetting.Column count = new IteratorSetting.Column(COUNTCF);
+		SummingCombiner.setColumns(settings, Arrays.asList(new IteratorSetting.Column[]{count}));
+		SummingCombiner.setEncodingType(settings, LongCombiner.StringEncoder.class);
+
+		ops.attachIterator(table, settings);
+	}
+
+	protected void initScannerAndWriter() throws TableNotFoundException {
+		this.scanner = conn.createScanner(table, Constants.NO_AUTHS);
+
+		this.writer = conn.createBatchWriter(table, 1000000L, 10L, 2);
 		if (autoflush) {
-			writer = new FlushedBatchWriter(writer);
+			this.writer = new FlushedBatchWriter(writer);
 		}
-	}
-
-	private void initMetadata() throws MutationsRejectedException, IOException {
-		// Maybe initialize size of map here.
-	}
-
-	public void flush() throws MutationsRejectedException {
-		writer.flush();
-	}
-
-	public void close() throws MutationsRejectedException {
-		writer.close();
-	}
-
-	@Override
-	public Comparator<? super K> comparator() {
-		return comparator;
 	}
 
 	@Override
 	public Set<Map.Entry<K, V>> entrySet() {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public K firstKey() {
-		try {
-			Map.Entry<Key, Value> entry = Utils.getFirstEntry(scanner);
-			return (K) (entry != null ? Utils.decode(entry.getKey()) : null);
-
-		} catch (ClassNotFoundException e) {
-			throw new RuntimeException(e);
-
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	@Override
-	public Set<K> keySet() {
-		Set<K> keys = new TreeSet<K>(comparator);
-
-		for (Map.Entry<K, V> entry : entrySet()) {
-			keys.add(entry.getKey());
-		}
-
-		return keys;
-	}
-
-	@Override
-	public K lastKey() {
-		Map.Entry<K, V> entry = lastEntry();
-		return entry != null ? entry.getKey() : null;
-	}
-
-	@Override
-	public Collection<V> values() {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public void clear() {
-		try {
-			connector.tableOperations().delete(tableName);
-			connector.tableOperations().create(tableName);
-
-			initScannerAndWriter();
-			
-		} catch (AccumuloException e) {
-			throw new RuntimeException(e);
-		} catch (AccumuloSecurityException e) {
-			throw new RuntimeException(e);
-		} catch (TableNotFoundException e) {
-			throw new RuntimeException(e);
-		} catch (TableExistsException e) {
-			throw new RuntimeException(e);
-		}
+		return new EntrySet();
 	}
 
 	@Override
 	public boolean containsKey(Object key) {
-		return getVal(key) != null;
-	}
-
-	@Override
-	public boolean containsValue(Object value) {
-		throw new UnsupportedOperationException();
+		return get(key) != null;
 	}
 
 	@Override
 	public V get(Object key) {
-		return getVal(key);
-	}
-
-	@Override
-	public boolean isEmpty() {
-		return size() != 0;
+		scanner.setRange(new Range(toRowId(key)));
+		Map.Entry<Key, Value> entry = firstEntry(scanner);
+		return entry != null ? Pickler.<V>unpickle(entry.getValue().get()) : null;
 	}
 
 	@Override
 	public V put(K key, V value) {
 		try {
-			V old = getVal(key);
+			V old = get(key);
 
-			Mutation m = new Mutation(Utils.toText(key));
-			m.put(EMPTY, EMPTY, Utils.toValue(value));
+			Mutation m = new Mutation(toRowId(key));
+			m.put(EMPTY, EMPTY, toValue(value));
 			writer.addMutation(m);
+
+			if (old == null) {
+				incrementCount();
+			}
 
 			return old;
 
-		} catch (IOException e) {
+		} catch (AccumuloException e) {
 			throw new RuntimeException(e);
-		} catch (MutationsRejectedException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	@Override
-	public void putAll(Map<? extends K, ? extends V> m) {
-		for (Map.Entry<? extends K, ? extends V> entry : m.entrySet()) {
-			put(entry.getKey(), entry.getValue());
 		}
 	}
 
 	@Override
 	public V remove(Object key) {
 		try {
-			V old = getVal(key);
+			V old = get(key);
 
 			if (old != null) {
-				Mutation m = new Mutation(Utils.toText(key));
-				m.putDelete((Text) null, (Text) null);
-				writer.addMutation(m);
+				deleteKey(key);
+				decrementCount();
 			}
 
 			return old;
 
-		} catch (MutationsRejectedException e) {
-			throw new RuntimeException(e);
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	@Override
-	public int size() {
-		int size = 0;
-
-		Iterator<Map.Entry<Key, Value>> i = scanner.iterator();
-		while (i.hasNext()) {
-			size++;
-		}
-
-		return size;
-	}
-
-	private V getVal(Object key) {
-		try {
-			V val = null;
-
-			scanner.setRange(Utils.toRange(key));
-			Iterator<Map.Entry<Key, Value>> i = scanner.iterator();
-			if (i.hasNext()) {
-				Map.Entry<Key, Value> entry = i.next();
-				val = (V) Utils.decode(entry.getValue());
-			}
-
-			return val;
-
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		} catch (ClassNotFoundException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	@Override
-	public SortedMap<K, V> subMap(K fromKey, K toKey) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public SortedMap<K, V> headMap(K toKey) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public SortedMap<K, V> tailMap(K fromKey) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public Map.Entry<K, V> lowerEntry(K key) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public K lowerKey(K key) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public Map.Entry<K, V> floorEntry(K key) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public K floorKey(K key) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public Map.Entry<K, V> ceilingEntry(K key) {
-		try {
-			Range range = new Range(Utils.toText(key), true, null, true);
-			scanner.setRange(range);
-			Map.Entry<Key, Value> entry = Utils.getFirstEntry(scanner);
-			return entry != null ? new EntryWrapper(this, entry) : null;
-
-		} catch (ClassNotFoundException e) {
-			throw new RuntimeException(e);
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	@Override
-	public K ceilingKey(K key) {
-		Map.Entry<K, V> entry = ceilingEntry(key);
-		return entry != null ? entry.getKey() : null;
-	}
-
-	@Override
-	public Map.Entry<K, V> higherEntry(K key) {
-		try {
-			Range range = new Range(Utils.toText(key), false, null, true);
-			scanner.setRange(range);
-			Map.Entry<Key, Value> entry = Utils.getFirstEntry(scanner);
-			return entry != null ? new EntryWrapper(this, entry) : null;
-
-		} catch (ClassNotFoundException e) {
-			throw new RuntimeException(e);
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	@Override
-	public K higherKey(K key) {
-		Map.Entry<K, V> entry = higherEntry(key);
-		return entry != null ? entry.getKey() : null;
-	}
-
-	@Override
-	public Map.Entry<K, V> firstEntry() {
-		try {
-			Map.Entry<Key, Value> entry = Utils.getFirstEntry(scanner);
-			return entry != null ? new EntryWrapper(this, entry) : null;
-
-		} catch (ClassNotFoundException e) {
-			throw new RuntimeException(e);
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	@Override
-	public Map.Entry<K, V> lastEntry() {
-		try {
-			Text key = connector.tableOperations().getMaxRow(tableName, Constants.NO_AUTHS,
-					null, true, null, true);
-			scanner.setRange(Utils.toRange(key));
-			return new EntryWrapper(this, Utils.getFirstEntry(scanner));
-
-		} catch (TableNotFoundException e) {
-			throw new RuntimeException(e);
 		} catch (AccumuloException e) {
 			throw new RuntimeException(e);
-		} catch (AccumuloSecurityException e) {
-			throw new RuntimeException(e);
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		} catch (ClassNotFoundException e) {
+		}
+	}
+
+
+	protected Map.Entry<Key, Value> firstEntry(Scanner scanner) {
+		Iterator<Map.Entry<Key, Value>> i = scanner.iterator();
+		return i.hasNext() ? i.next() : null;
+	}
+
+	protected static Text toRowId(Object key) {
+		return new Text(Pickler.pickle(key));
+	}
+
+	protected static Value toValue(Object value) {
+		return new Value(Pickler.pickle(value));
+	}
+
+	protected void deleteKey(Object key) {
+		try {
+			Mutation m = new Mutation(toRowId(key));
+			m.putDelete(EMPTY, EMPTY);
+			writer.addMutation(m);
+
+		} catch (AccumuloException e) {
 			throw new RuntimeException(e);
 		}
 	}
 
-	@Override
-	public Map.Entry<K, V> pollFirstEntry() {
-		Map.Entry<K, V> first = firstEntry();
-		remove(first.getKey());
-		return first;
-	}
+	protected void updateCount(long incr, boolean delete) throws AccumuloException {
+		Mutation m = new Mutation(METAROW);
 
-	@Override
-	public Map.Entry<K, V> pollLastEntry() {
-		Map.Entry<K, V> last = lastEntry();
-		remove(last.getKey());
-		return last;
-	}
-
-	@Override
-	public NavigableMap<K, V> descendingMap() {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public NavigableSet<K> navigableKeySet() {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public NavigableSet<K> descendingKeySet() {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public NavigableMap<K, V> subMap(K fromKey, boolean fromInclusive, K toKey,
-			boolean toInclusive) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public NavigableMap<K, V> headMap(K toKey, boolean inclusive) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public NavigableMap<K, V> tailMap(K fromKey, boolean inclusive) {
-		throw new UnsupportedOperationException();
-	}
-
-
-	private class EntryWrapper implements Map.Entry<K, V> {
-
-		private AccumuloMap<K, V> parent;
-		private K key;
-		private V val;
-
-		public EntryWrapper(AccumuloMap<K, V> parent, Map.Entry<Key, Value> entry) throws IOException, ClassNotFoundException {
-			this(parent, (K) Utils.decode(entry.getKey()),
-					(V) Utils.decode(entry.getValue()));
+		if (delete) {
+			m.putDelete(COUNTCF, EMPTY);
 		}
 
-		public EntryWrapper(AccumuloMap<K, V> parent, K key, V val) {
-			this.parent = parent;
-			this.key = key;
-			this.val = val;
+		m.put(COUNTCF, EMPTY, new Value(Long.toString(incr).getBytes()));
+
+		writer.addMutation(m);
+	}
+
+	protected void incrementCount() throws AccumuloException {
+		updateCount(+1, false);
+	}
+
+	protected void decrementCount() throws AccumuloException {
+		updateCount(-1, false);
+	}
+
+	protected void resetCount() throws AccumuloException {
+		updateCount(0, true);
+	}
+	
+	
+	protected class EntrySet extends AbstractSet<Map.Entry<K, V>> {
+
+		@Override
+		public Iterator<Map.Entry<K, V>> iterator() {
+			return new EntryIterator();
+		}
+
+		@Override
+		public int size() {
+			scanner.setRange(new Range(METAROW));
+			scanner.fetchColumnFamily(COUNTCF);
+			Map.Entry<Key, Value> entry = firstEntry(scanner);
+			scanner.clearColumns();
+
+			return (int) Long.parseLong(new String(entry.getValue().get()));
+		}
+
+		@Override
+		public void clear() {
+			try {
+				recreateTable();
+				initScannerAndWriter();
+				resetCount();
+
+			} catch (AccumuloException e) {
+				throw new RuntimeException(e);
+			} catch (AccumuloSecurityException e) {
+				throw new RuntimeException(e);
+			} catch (TableNotFoundException e) {
+				throw new RuntimeException(e);
+			} catch (TableExistsException e) {
+				throw new RuntimeException(e);
+			}
+		}
+
+	}
+
+	protected class EntryIterator implements Iterator<Map.Entry<K, V>> {
+
+		protected Iterator<Map.Entry<Key, Value>> entries;
+		protected Map.Entry<K, V> curEntry;
+
+		public EntryIterator() {
+			scanner.setRange(new Range());
+			entries = scanner.iterator();
+		}
+
+		@Override
+		public boolean hasNext() {
+			return entries.hasNext();
+		}
+
+		@Override
+		public Map.Entry<K, V> next() {
+			curEntry = new EntryWrapper(entries.next());
+			return curEntry;
+		}
+
+		@Override
+		public void remove() {
+			deleteKey(curEntry.getKey());
+		}
+
+	}
+
+	protected class EntryWrapper implements Map.Entry<K, V> {
+
+		protected K key;
+		protected V value;
+
+		public EntryWrapper(Map.Entry<Key, Value> entry) {
+			this.key = Pickler.unpickle(entry.getKey().getRow().getBytes());
+			this.value = Pickler.unpickle(entry.getValue().get());
 		}
 
 		@Override
@@ -431,16 +291,34 @@ public class AccumuloMap<K, V> implements NavigableMap<K, V> {
 
 		@Override
 		public V getValue() {
-			return val;
+			return value;
 		}
 
 		@Override
 		public V setValue(V value) {
-			parent.put(key, value);
-			this.val = value;
-			return val;
+			V old = put(key, value);
+			this.value = value;
+			return old;
 		}
 
+	}
+
+	@Override
+	public void flush() {
+		try {
+			writer.flush();
+		} catch (MutationsRejectedException e) {
+			throw new RuntimeException();
+		}
+	}
+
+	@Override
+	public void close() {
+		try {
+			writer.close();
+		} catch (MutationsRejectedException e) {
+			throw new RuntimeException();
+		}
 	}
 
 }

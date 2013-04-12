@@ -38,5 +38,15 @@
   		<artifactId>zookeeper</artifactId>
   		<version>3.3.6</version>
   	</dependency>
+  	<dependency>
+  		<groupId>org.fusesource.leveldbjni</groupId>
+  		<artifactId>leveldbjni-all</artifactId>
+  		<version>1.5</version>
+  	</dependency>
+  	<dependency>
+  		<groupId>com.esotericsoftware.kryo</groupId>
+  		<artifactId>kryo</artifactId>
+  		<version>2.20</version>
+  	</dependency>
   </dependencies>
 </project>

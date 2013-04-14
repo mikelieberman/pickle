@@ -1,4 +1,4 @@
-package org.mikelieberman.pickle.accumulo;
+package pickle.accumulo;
 
 import org.apache.accumulo.core.client.BatchWriter;
 import org.apache.accumulo.core.client.MutationsRejectedException;

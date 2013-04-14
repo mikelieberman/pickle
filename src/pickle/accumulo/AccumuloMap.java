@@ -1,6 +1,5 @@
-package org.mikelieberman.pickle.accumulo;
+package pickle.accumulo;
 
-import java.nio.ByteBuffer;
 import java.util.AbstractMap;
 import java.util.AbstractSet;
 import java.util.Arrays;
@@ -23,11 +22,14 @@ import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.data.Value;
+import org.apache.accumulo.core.iterators.Combiner;
 import org.apache.accumulo.core.iterators.LongCombiner;
 import org.apache.accumulo.core.iterators.user.SummingCombiner;
 import org.apache.hadoop.io.Text;
-import org.mikelieberman.pickle.PickleMap;
-import org.mikelieberman.pickle.Pickler;
+
+import pickle.PickleMap;
+import pickle.Pickler;
+
 
 public class AccumuloMap<K, V> extends AbstractMap<K, V> implements PickleMap<K, V> {
 
@@ -90,8 +92,8 @@ public class AccumuloMap<K, V> extends AbstractMap<K, V> implements PickleMap<K,
 		IteratorSetting settings = new IteratorSetting(10, SummingCombiner.class);
 
 		IteratorSetting.Column count = new IteratorSetting.Column(COUNTCF);
-		SummingCombiner.setColumns(settings, Arrays.asList(new IteratorSetting.Column[]{count}));
-		SummingCombiner.setEncodingType(settings, LongCombiner.StringEncoder.class);
+		Combiner.setColumns(settings, Arrays.asList(new IteratorSetting.Column[]{count}));
+		LongCombiner.setEncodingType(settings, LongCombiner.StringEncoder.class);
 
 		ops.attachIterator(table, settings);
 	}

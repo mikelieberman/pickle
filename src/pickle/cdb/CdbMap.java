@@ -18,7 +18,9 @@ import com.strangegizmo.cdb.Cdb;
 import com.strangegizmo.cdb.CdbElement;
 import com.strangegizmo.cdb.CdbMake;
 
-
+/**
+ * @author Michael Lieberman
+ */
 public class CdbMap<K, V> extends AbstractMap<K, V> implements PickleMap<K, V> {
 
 	public static enum Mode {CREATE, READ};

@@ -7,6 +7,9 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 
+/**
+ * @author Michael Lieberman
+ */
 public class Pickler {
 
 	private static final Kryo KRYO = new Kryo();

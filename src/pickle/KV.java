@@ -3,6 +3,9 @@ package pickle;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+/**
+ * @author Michael Lieberman
+ */
 public final class KV {
 	
 	private KV() {

@@ -2,6 +2,9 @@ package pickle;
 
 import java.util.Map;
 
+/**
+ * @author Michael Lieberman
+ */
 public interface PickleMap<K, V> extends Map<K, V> {
 
 	/**

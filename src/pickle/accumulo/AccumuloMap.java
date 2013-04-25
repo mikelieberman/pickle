@@ -30,7 +30,9 @@ import org.apache.hadoop.io.Text;
 import pickle.PickleMap;
 import pickle.Pickler;
 
-
+/**
+ * @author Michael Lieberman
+ */
 public class AccumuloMap<K, V> extends AbstractMap<K, V> implements PickleMap<K, V> {
 
 	protected static final Text EMPTY = new Text();

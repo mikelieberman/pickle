@@ -19,7 +19,9 @@ import pickle.KV;
 import pickle.PickleMap;
 import pickle.KV.Type;
 
-
+/**
+ * @author Michael Lieberman
+ */
 public class LevelDBMap<K, V> extends AbstractMap<K, V> implements PickleMap<K, V> {
 
 	protected static final String SIZESTR = "size";
@@ -31,7 +33,7 @@ public class LevelDBMap<K, V> extends AbstractMap<K, V> implements PickleMap<K, 
 	public LevelDBMap(String dbDir) throws IOException {
 		this(dbDir, false);
 	}
-	
+
 	public LevelDBMap(String dbDir, boolean clear) throws IOException {
 		this.dbDir = new File(dbDir);
 		reopen(clear);
@@ -46,7 +48,8 @@ public class LevelDBMap<K, V> extends AbstractMap<K, V> implements PickleMap<K, 
 
 		Options options = new Options();
 		options.createIfMissing(true);
-		options.writeBufferSize(0);
+		options.cacheSize(1000000L);
+		options.writeBufferSize(1000000);
 		this.db = JniDBFactory.factory.open(dbDir, options);
 
 		// Initialize size.
@@ -147,7 +150,7 @@ public class LevelDBMap<K, V> extends AbstractMap<K, V> implements PickleMap<K, 
 		return new EntrySet();
 	}
 
-	
+
 	protected int getSize() {
 		return KV.fromBytes(db.get(SIZE));
 	}

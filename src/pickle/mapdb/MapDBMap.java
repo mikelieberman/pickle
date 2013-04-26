@@ -25,16 +25,23 @@ public class MapDBMap<K, V> implements NavigablePickleMap<K, V> {
 	public MapDBMap(String dir) {
 		this(dir, "map");
 	}
-
-	public MapDBMap(String dir, String mapName) {
-		this(dir, mapName, false);
+	
+	public MapDBMap(String dir, Comparator<K> comparator) {
+		this(dir, "map", comparator);
 	}
 
-	public MapDBMap(String dir, String mapName, boolean clear) {
+	public MapDBMap(String dir, String mapName) {
+		this(dir, mapName, null);
+	}
+
+	public MapDBMap(String dir, String mapName, Comparator<K> comparator) {
 		db = DBMaker.newFileDB(new File(dir)).writeAheadLogDisable().make();
-		map = db.getTreeMap(mapName);
-		if (clear) {
-			clear();
+		try {
+			map = db.createTreeMap(mapName, 32, false, false, null, null, comparator);
+		} catch (IllegalArgumentException e) {
+			e.printStackTrace();
+			// Map already exists so just get it.
+			map = db.getTreeMap(mapName);
 		}
 	}
 

@@ -22,16 +22,16 @@ public class MapDBMap<K, V> implements NavigablePickleMap<K, V> {
 	protected DB db;
 	protected NavigableMap<K, V> map;
 
-	public MapDBMap(String dir) {
-		this(dir, "map");
+	public MapDBMap(String baseFile) {
+		this(baseFile, "map");
 	}
 
-	public MapDBMap(String dir, Comparator<K> comparator) {
-		this(dir, "map", comparator);
+	public MapDBMap(String baseFile, Comparator<K> comparator) {
+		this(baseFile, "map", comparator);
 	}
 
-	public MapDBMap(String dir, String mapName) {
-		this(dir, mapName, null);
+	public MapDBMap(String baseFile, String mapName) {
+		this(baseFile, mapName, null);
 	}
 
 	public MapDBMap(String dir, String mapName, Comparator<K> comparator) {

@@ -133,5 +133,10 @@
 			<artifactId>cdb</artifactId>
 			<version>1.0.4</version>
 		</dependency>
+		<dependency>
+			<groupId>org.xerial</groupId>
+			<artifactId>sqlite-jdbc</artifactId>
+			<version>3.7.2</version>
+		</dependency>
 	</dependencies>
 </project>

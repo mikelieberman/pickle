@@ -17,15 +17,15 @@ Current implementations:
 - Accumulo (http://accumulo.apache.org/)
 - LevelDB (http://code.google.com/p/leveldb/)
 - Cdb (http://cr.yp.to/cdb.html)
+- SQLite (http://www.sqlite.org/)
+- MapDB (http://www.mapdb.org/)
 
 Planned implementations:
 - Berkeley DB (http://www.oracle.com/technetwork/products/berkeleydb/)
 - JDBM (http://jdbm.sourceforge.net/)
 
 Other potential implementations:
-- SQLite (http://www.sqlite.org/)
 - Voldemort (http://www.project-voldemort.com/)
-- MapDB (http://www.mapdb.org/)
 - MongoDB (http://www.mongodb.org/)
 - ... (other suggestions welcome)
 
